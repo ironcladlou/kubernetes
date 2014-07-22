@@ -30,25 +30,20 @@ import (
 	"github.com/golang/glog"
 )
 
-// ReplicationManager is responsible for synchronizing ReplicationController objects stored in etcd
-// with actual running pods.
-// TODO: Remove the etcd dependency and re-factor in terms of a generic watch interface
 type BuildJobManager struct {
 	etcdClient tools.EtcdClient
 	kubeClient client.Interface
 	podControl PodControlInterface
 	syncTime   <-chan time.Time
 
-	// TODO: figure out analog
-	// To allow injection of syncReplicationController for testing.
-	syncHandler func(controllerSpec api.ReplicationController) error
+	syncHandler func(jobSpec api.Job) error
 }
 
 // PodControlInterface is an interface that knows how to add or delete pods
 // created as an interface to allow testing.
 type PodControlInterface interface {
 	// createReplica creates new replicated pods according to the spec.
-	createReplica(controllerSpec api.ReplicationController)
+	runJob(jobSpec api.Job)
 	// deletePod deletes the pod identified by podID.
 	deletePod(podID string) error
 }
@@ -58,7 +53,7 @@ type RealPodControl struct {
 	kubeClient client.Interface
 }
 
-func (r RealPodControl) createReplica(controllerSpec api.ReplicationController) {
+func (r RealPodControl) runJob(controllerSpec api.ReplicationController) {
 	labels := controllerSpec.DesiredState.PodTemplate.Labels
 	if labels != nil {
 		labels["replicationController"] = controllerSpec.ID
@@ -108,7 +103,7 @@ func (rm *BuildJobManager) watchBuildJobs() {
 
 	go func() {
 		defer util.HandleCrash()
-		_, err := rm.etcdClient.Watch("/jobs/builds", 0, true, watchChannel, stop)
+		_, err := rm.etcdClient.Watch("/jobs/build", 0, true, watchChannel, stop)
 		if err == etcd.ErrWatchStoppedByUser {
 			close(watchChannel)
 		} else {
@@ -192,7 +187,7 @@ func (rm *BuildJobManager) syncJobState(jobSpec api.Job) error {
 func (rm *BuildJobManager) synchronize() {
 	var jobSpecs []api.Job
 	helper := tools.EtcdHelper{rm.etcdClient}
-	err := helper.ExtractList("/job/builds", &jobSpecs)
+	err := helper.ExtractList("/jobs/build", &jobSpecs)
 	if err != nil {
 		glog.Errorf("Synchronization error: %v (%#v)", err, err)
 		return
