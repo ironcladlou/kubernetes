@@ -221,7 +221,9 @@ func (rm *BuildJobManager) syncJobState(job api.Job) error {
 			return nil
 		}
 
+		// TODO: better way of evaluating job completion
 		job.State = api.JobComplete
+
 		infoKeys := make([]string, len(podInfo))
 		i := 0
 		for k, _ := range podInfo {
