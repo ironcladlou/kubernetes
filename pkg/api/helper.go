@@ -39,6 +39,8 @@ func init() {
 		Status{},
 		ServerOpList{},
 		ServerOp{},
+		JobList{},
+		Job{},
 	)
 }
 

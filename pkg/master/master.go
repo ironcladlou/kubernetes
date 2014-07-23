@@ -37,6 +37,7 @@ type Master struct {
 	controllerRegistry registry.ControllerRegistry
 	serviceRegistry    registry.ServiceRegistry
 	minionRegistry     registry.MinionRegistry
+	jobRegistry        registry.JobRegistry
 	storage            map[string]apiserver.RESTStorage
 	client             *client.Client
 }
@@ -48,6 +49,7 @@ func NewMemoryServer(minions []string, podInfoGetter client.PodInfoGetter, cloud
 		controllerRegistry: registry.MakeMemoryRegistry(),
 		serviceRegistry:    registry.MakeMemoryRegistry(),
 		minionRegistry:     registry.MakeMinionRegistry(minions),
+		jobRegistry:        registry.MakeMemoryRegistry(),
 		client:             client,
 	}
 	m.init(cloud, podInfoGetter)
@@ -63,6 +65,7 @@ func New(etcdServers, minions []string, podInfoGetter client.PodInfoGetter, clou
 		controllerRegistry: registry.MakeEtcdRegistry(etcdClient, minionRegistry),
 		serviceRegistry:    registry.MakeEtcdRegistry(etcdClient, minionRegistry),
 		minionRegistry:     minionRegistry,
+		jobRegistry:        registry.MakeEtcdRegistry(etcdClient, minionRegistry),
 		client:             client,
 	}
 	m.init(cloud, podInfoGetter)
@@ -105,6 +108,7 @@ func (m *Master) init(cloud cloudprovider.Interface, podInfoGetter client.PodInf
 		"replicationControllers": registry.NewControllerRegistryStorage(m.controllerRegistry, m.podRegistry),
 		"services":               registry.MakeServiceRegistryStorage(m.serviceRegistry, cloud, m.minionRegistry),
 		"minions":                registry.MakeMinionRegistryStorage(m.minionRegistry),
+		"jobs":                   registry.NewJobRegistryStorage(m.jobRegistry),
 	}
 }
 
