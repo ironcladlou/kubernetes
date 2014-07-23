@@ -363,10 +363,10 @@ type Job struct {
 type JobState string
 
 const (
-	StateNew       JobState = "new"
-	StateScheduled JobState = "scheduled"
-	StateRunning   JobState = "running"
-	StateComplete  JobState = "complete"
+	JobNew      JobState = "new"
+	JobPending  JobState = "pending"
+	JobRunning  JobState = "running"
+	JobComplete JobState = "complete"
 )
 
 // APIObject has appropriate encoder and decoder functions, such that on the wire, it's
