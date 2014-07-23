@@ -2,6 +2,7 @@ package buildjob
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -42,7 +43,7 @@ type RealPodControl struct {
 func (r RealPodControl) runJob(jobSpec api.Job) {
 	createPodConfig := typeDelegates[jobSpec.Type]
 	if createPodConfig == nil {
-		jobSpec.State = api.StateComplete
+		jobSpec.State = api.JobComplete
 		jobSpec.Success = false
 		// TODO: handle error
 		// kubeClient.UpdateJob(jobSpec)
@@ -51,7 +52,7 @@ func (r RealPodControl) runJob(jobSpec api.Job) {
 
 	pod, err := createPodConfig(jobSpec)
 	if err != nil {
-		jobSpec.State = api.StateComplete
+		jobSpec.State = api.JobComplete
 		jobSpec.Success = false
 		// TODO: update state of job
 		// kubeClient.UpdateJob(jobSpec)
@@ -61,13 +62,13 @@ func (r RealPodControl) runJob(jobSpec api.Job) {
 	_, err = r.kubeClient.CreatePod(*pod)
 	if err != nil {
 		glog.Errorf("%#v\n", err)
-		jobSpec.State = api.StateComplete
+		jobSpec.State = api.JobComplete
 		jobSpec.Success = false
 		// kubeClient.UpdateJob(jobSpec)
 	}
 
-	jobSpec.State = api.StateScheduled
-	kubeClient.UpdateJob(jobSpec)
+	jobSpec.State = api.JobNew
+	// kubeClient.UpdateJob(jobSpec)
 }
 
 func (r RealPodControl) deletePod(podID string) error {
@@ -162,18 +163,59 @@ func (rm *BuildJobManager) handleWatchResponse(response *etcd.Response) (*api.Jo
 	case "delete":
 		// TODO: determine if some cleanup should be done here
 	}
+
 	return nil, nil
 }
 
 // Sync loop implementation, pointed to by rm.syncHandler
 func (rm *BuildJobManager) syncJobState(jobSpec api.Job) error {
 	jobPod, err := rm.kubeClient.GetPod(jobSpec.PodId)
-
 	if err != nil {
 		return err
 	}
 
-	// state transition logic here
+	var (
+		podStatus = jobPod.CurrentState.Status
+		podInfo   = jobPod.CurrentState.Info
+		jobState  = jobSpec.State
+		update    = false
+	)
+
+	switch podStatus {
+	case api.PodRunning:
+		switch jobState {
+		case api.JobNew || api.JobPending:
+			jobSpec.State = api.JobRunning
+			update = true
+		case api.JobComplete:
+			return errors.New("Illegal state transition")
+		}
+	case api.PodPending:
+		switch jobState {
+		case api.JobNew:
+			jobSpec.State = api.JobPending
+			update = true
+		case api.JobComplete:
+			return errors.New("Illegal state transition")
+		}
+	case api.PodStopped:
+		if jobState == api.JobComplete {
+			return nil
+		}
+
+		jobSpec.State = api.JobComplete
+		containerState = podInfo[0].State
+		update = true
+
+		if containerState.ExitCode == 0 {
+			jobSpec.Success = true
+		}
+	}
+
+	if update {
+		kubeClient.UpdateJob(jobSpec)
+	}
+
 	return nil
 }
 
