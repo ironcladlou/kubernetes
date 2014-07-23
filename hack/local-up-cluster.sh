@@ -65,6 +65,12 @@ ${GO_OUT}/controller-manager \
   --master="127.0.0.1:${API_PORT}" &> ${CTLRMGR_LOG} &
 CTLRMGR_PID=$!
 
+BLDMGR_LOG=/tmp/build-job-manager.log
+${GO_OUT}/build-job-manager \
+  --etcd_servers="http://127.0.0.1:4001" \
+  --master="127.0.0.1:${API_PORT}" &> ${BLDMGR_LOG} &
+BLDMGR_PID=$!
+
 KUBELET_LOG=/tmp/kubelet.log
 ${GO_OUT}/kubelet \
   --etcd_servers="http://127.0.0.1:4001" \
@@ -82,6 +88,7 @@ echo "Local Kubernetes cluster is running. Press Ctrl-C to shut it down."
 echo "Logs: "
 echo "  ${APISERVER_LOG}"
 echo "  ${CTLRMGR_LOG}"
+echo "  ${BLDMGR_LOG}"
 echo "  ${KUBELET_LOG}"
 echo "  ${PROXY_LOG}"
 
@@ -90,6 +97,7 @@ cleanup()
     echo "Cleaning up..."
     kill ${APISERVER_PID}
     kill ${CTLRMGR_PID}
+    kill ${BLDMGR_PID}
     kill ${KUBELET_PID}
     kill ${PROXY_PID}
 
