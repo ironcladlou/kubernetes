@@ -45,7 +45,7 @@ func (r RealPodControl) runJob(jobSpec api.Job) {
 		jobSpec.State = api.StateComplete
 		jobSpec.Success = false
 		// TODO: handle error
-		kubeClient.UpdateJob(jobSpec)
+		// kubeClient.UpdateJob(jobSpec)
 		return
 	}
 
@@ -54,14 +54,20 @@ func (r RealPodControl) runJob(jobSpec api.Job) {
 		jobSpec.State = api.StateComplete
 		jobSpec.Success = false
 		// TODO: update state of job
+		// kubeClient.UpdateJob(jobSpec)
 		return
 	}
 
-	jobSpec.State = api.StateScheduled
 	_, err = r.kubeClient.CreatePod(*pod)
 	if err != nil {
 		glog.Errorf("%#v\n", err)
+		jobSpec.State = api.StateComplete
+		jobSpec.Success = false
+		// kubeClient.UpdateJob(jobSpec)
 	}
+
+	jobSpec.State = api.StateScheduled
+	kubeClient.UpdateJob(jobSpec)
 }
 
 func (r RealPodControl) deletePod(podID string) error {
@@ -69,6 +75,7 @@ func (r RealPodControl) deletePod(podID string) error {
 }
 
 func dockerfileBuildJobFor(jobSpec api.Job) (*api.Pod, error) {
+	pod := api.Pod{}
 	return nil, nil
 }
 
@@ -158,14 +165,10 @@ func (rm *BuildJobManager) handleWatchResponse(response *etcd.Response) (*api.Jo
 	return nil, nil
 }
 
-func jobNameFor(jobSpec api.Job) string {
-	return fmt.Sprintf("job-build-%s-%i", job.Type, job.Id)
-}
-
 // Sync loop implementation, pointed to by rm.syncHandler
 func (rm *BuildJobManager) syncJobState(jobSpec api.Job) error {
-	name := jobNameFor(jobSpec)
-	jobPod, err := rm.kubeClient.GetPod(name)
+	jobPod, err := rm.kubeClient.GetPod(jobSpec.PodId)
+
 	if err != nil {
 		return err
 	}
