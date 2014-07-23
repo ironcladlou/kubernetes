@@ -366,6 +366,7 @@ type Job struct {
 	Success  bool              `json:"success,omitempty" yaml:"success,omitempty"`
 	Type     string            `json:"type,omitempty" yaml:"type,omitempty"`
 	Context  map[string]string `json:"context,omitempty" yaml:"context,omitempty"`
+	PodId    string
 }
 
 type JobState string

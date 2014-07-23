@@ -25,7 +25,7 @@ source $(dirname $0)/config-go.sh
 
 cd "${KUBE_TARGET}"
 
-BINARIES="proxy integration apiserver controller-manager kubelet kubecfg"
+BINARIES="proxy integration apiserver controller-manager build-job-manager kubelet kubecfg"
 
 if [ $# -gt 0 ]; then
   BINARIES="$@"
