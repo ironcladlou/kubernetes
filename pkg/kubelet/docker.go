@@ -41,6 +41,7 @@ type DockerInterface interface {
 	StartContainer(id string, hostConfig *docker.HostConfig) error
 	StopContainer(id string, timeout uint) error
 	PullImage(opts docker.PullImageOptions, auth docker.AuthConfiguration) error
+	RemoveContainer(opts docker.RemoveContainerOptions) error
 }
 
 // DockerID is an ID of docker container. It is a type to make it clear when we're working with docker container Ids

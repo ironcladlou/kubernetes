@@ -261,6 +261,7 @@ func (kl *Kubelet) runContainer(pod *Pod, container *api.Container, podVolumes v
 // Kill a docker container
 func (kl *Kubelet) killContainer(dockerContainer docker.APIContainers) error {
 	err := kl.dockerClient.StopContainer(dockerContainer.ID, 10)
+	err = kl.dockerClient.RemoveContainer(docker.RemoveContainerOptions{ID: dockerContainer.ID, Force: true})
 	podFullName, containerName := parseDockerName(dockerContainer.Names[0])
 	kl.LogEvent(&api.Event{
 		Event: "STOP",
@@ -332,14 +333,15 @@ func (kl *Kubelet) syncPod(pod *Pod, dockerContainers DockerContainers, keepChan
 				glog.Errorf("couldn't find docker container with id %v: %s", dockerContainer.ID, cerr)
 				continue
 			}
-			glog.Infof("!!!!! docker container: %v, policy: %s", c, container.RestartPolicy)
+
 			if !c.State.Running && container.RestartPolicy == "runOnce" {
-				glog.Infof("allowing pod %s container %s (id %v) to remain exited due to runOnce restart policy", podFullName, container.Name, containerID)
+				glog.Infof("allowing pod %s container %s (id %v) to remain stopped due to runOnce restart policy", podFullName, container.Name, containerID)
+				keepChannel <- containerID
 				continue
 			}
 
 			// TODO: This should probably be separated out into a separate goroutine.
-			healthy, err := kl.healthy(container, dockerContainer)
+			healthy, err := kl.healthy(container, dockerContainer, c)
 			if err != nil {
 				glog.V(1).Infof("health check errored: %v", err)
 				continue
@@ -416,7 +418,7 @@ func (kl *Kubelet) SyncPods(pods []Pod) error {
 	<-ch
 
 	// Kill any containers we don't need
-	existingContainers, err := getKubeletDockerContainers(kl.dockerClient, false)
+	existingContainers, err := getKubeletDockerContainers(kl.dockerClient, true)
 	if err != nil {
 		glog.Errorf("Error listing containers: %v", err)
 		return err
@@ -535,10 +537,14 @@ func (kl *Kubelet) GetMachineInfo() (*info.MachineInfo, error) {
 	return kl.cadvisorClient.MachineInfo()
 }
 
-func (kl *Kubelet) healthy(container api.Container, dockerContainer *docker.APIContainers) (health.Status, error) {
+func (kl *Kubelet) healthy(container api.Container, dockerContainer *docker.APIContainers, c *docker.Container) (health.Status, error) {
 	// Give the container 60 seconds to start up.
 	if container.LivenessProbe == nil {
-		return health.Healthy, nil
+		if c.State.Running {
+			return health.Healthy, nil
+		} else {
+			return health.Unhealthy, nil
+		}
 	}
 	if time.Now().Unix()-dockerContainer.Created < container.LivenessProbe.InitialDelaySeconds {
 		return health.Healthy, nil
