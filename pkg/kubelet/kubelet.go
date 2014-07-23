@@ -326,6 +326,18 @@ func (kl *Kubelet) syncPod(pod *Pod, dockerContainers DockerContainers, keepChan
 			glog.Infof("pod %s container %s exists as %v", podFullName, container.Name, containerID)
 			glog.V(1).Infof("pod %s container %s exists as %v", podFullName, container.Name, containerID)
 
+			var c *docker.Container
+			var cerr error
+			if c, cerr = kl.dockerClient.InspectContainer(dockerContainer.ID); cerr != nil || c == nil {
+				glog.Errorf("couldn't find docker container with id %v: %s", dockerContainer.ID, cerr)
+				continue
+			}
+			glog.Infof("!!!!! docker container: %v, policy: %s", c, container.RestartPolicy)
+			if !c.State.Running && container.RestartPolicy == "runOnce" {
+				glog.Infof("allowing pod %s container %s (id %v) to remain exited due to runOnce restart policy", podFullName, container.Name, containerID)
+				continue
+			}
+
 			// TODO: This should probably be separated out into a separate goroutine.
 			healthy, err := kl.healthy(container, dockerContainer)
 			if err != nil {
@@ -370,7 +382,7 @@ func (kl *Kubelet) SyncPods(pods []Pod) error {
 	keepChannel := make(chan DockerID, defaultChanSize)
 	waitGroup := sync.WaitGroup{}
 
-	dockerContainers, err := getKubeletDockerContainers(kl.dockerClient)
+	dockerContainers, err := getKubeletDockerContainers(kl.dockerClient, true)
 	if err != nil {
 		glog.Errorf("Error listing containers %#v", dockerContainers)
 		return err
@@ -404,7 +416,7 @@ func (kl *Kubelet) SyncPods(pods []Pod) error {
 	<-ch
 
 	// Kill any containers we don't need
-	existingContainers, err := getKubeletDockerContainers(kl.dockerClient)
+	existingContainers, err := getKubeletDockerContainers(kl.dockerClient, false)
 	if err != nil {
 		glog.Errorf("Error listing containers: %v", err)
 		return err
@@ -503,7 +515,7 @@ func (kl *Kubelet) GetContainerInfo(podFullName, containerName string, req *info
 	if kl.cadvisorClient == nil {
 		return nil, nil
 	}
-	dockerContainers, err := getKubeletDockerContainers(kl.dockerClient)
+	dockerContainers, err := getKubeletDockerContainers(kl.dockerClient, true)
 	if err != nil {
 		return nil, err
 	}
