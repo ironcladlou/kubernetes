@@ -38,7 +38,7 @@ type RealPodControl struct {
 
 func (r RealPodControl) runJob(job api.Job) error {
 	glog.Infof("Running job ID %s", job.ID)
-	createPodConfig := r.typeDelegates[job.Type]
+	createPodConfig := r.typeDelegates["dockerfile"]
 	if createPodConfig == nil {
 		job.State = api.JobComplete
 		job.Success = false
@@ -97,6 +97,11 @@ func (r RealPodControl) deletePod(podID string) error {
 }
 
 func dockerfileBuildJobFor(job api.Job) (*api.Pod, error) {
+	var envVars []api.EnvVar
+	for k, v := range job.Context {
+		envVars = append(envVars, api.EnvVar{Name: k, Value: v})
+	}
+
 	pod := &api.Pod{
 		Labels: map[string]string{
 			"podType": "job",
@@ -111,10 +116,7 @@ func dockerfileBuildJobFor(job api.Job) (*api.Pod, error) {
 						Image:         "ironcladlou/openshift-docker-builder",
 						Privileged:    true,
 						RestartPolicy: "runOnce",
-						Env: []api.EnvVar{
-							{Name: "BUILD_TAG", Value: job.Context["BUILD_TAG"]},
-							{Name: "DOCKER_CONTEXT_URL", Value: job.Context["DOCKER_CONTEXT_URL"]},
-						},
+						Env:           envVars,
 					},
 				},
 			},
