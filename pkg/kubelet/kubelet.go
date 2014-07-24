@@ -384,7 +384,7 @@ func (kl *Kubelet) SyncPods(pods []Pod) error {
 	keepChannel := make(chan DockerID, defaultChanSize)
 	waitGroup := sync.WaitGroup{}
 
-	dockerContainers, err := getKubeletDockerContainers(kl.dockerClient, true)
+	dockerContainers, err := getKubeletDockerContainers(kl.dockerClient)
 	if err != nil {
 		glog.Errorf("Error listing containers %#v", dockerContainers)
 		return err
@@ -418,7 +418,7 @@ func (kl *Kubelet) SyncPods(pods []Pod) error {
 	<-ch
 
 	// Kill any containers we don't need
-	existingContainers, err := getKubeletDockerContainers(kl.dockerClient, true)
+	existingContainers, err := getKubeletDockerContainers(kl.dockerClient)
 	if err != nil {
 		glog.Errorf("Error listing containers: %v", err)
 		return err
@@ -517,7 +517,7 @@ func (kl *Kubelet) GetContainerInfo(podFullName, containerName string, req *info
 	if kl.cadvisorClient == nil {
 		return nil, nil
 	}
-	dockerContainers, err := getKubeletDockerContainers(kl.dockerClient, true)
+	dockerContainers, err := getKubeletDockerContainers(kl.dockerClient)
 	if err != nil {
 		return nil, err
 	}
