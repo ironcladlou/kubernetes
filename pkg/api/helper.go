@@ -41,6 +41,8 @@ func init() {
 		ServerOp{},
 		JobList{},
 		Job{},
+		Build{},
+		BuildList{},
 	)
 }
 

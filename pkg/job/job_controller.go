@@ -7,7 +7,6 @@ import (
 
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/api"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/client"
-	"github.com/GoogleCloudPlatform/kubernetes/pkg/tools"
 	"github.com/GoogleCloudPlatform/kubernetes/pkg/util"
 	"github.com/golang/glog"
 )
@@ -138,12 +137,8 @@ func (jc *JobController) syncJobState(job api.Job) error {
 	return nil
 }
 
-func (r JobRunner) run(job api.Job) error {
-	if job == nil {
-		return errors.new("no job specified")
-	}
-
-	glog.Infof("Attempting to create job %#v", job)
+func (r *DefaultJobRunner) run(job api.Job) error {
+	glog.Infof("Attempting to run pod for job %v: %#v", job.ID, job.Pod)
 	pod, err := r.kubeClient.CreatePod(job.Pod)
 
 	if err != nil {
