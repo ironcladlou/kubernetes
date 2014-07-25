@@ -362,19 +362,19 @@ type JobList struct {
 // Job is a task that can be scheduled.
 type Job struct {
 	JSONBase `json:",inline" yaml:",inline"`
-	State    JobState          `json:"state,omitempty" yaml:"state,omitempty"`
-	Success  bool              `json:"success,omitempty" yaml:"success,omitempty"`
-	Context  map[string]string `json:"context,omitempty" yaml:"context,omitempty"`
-	PodID    string            `json:"podID,omitempty" yaml:"podID,omitempty"`
+	Status   JobStatus `json:"state,omitempty" yaml:"state,omitempty"`
+	Success  bool      `json:"success,omitempty" yaml:"success,omitempty"`
+	Pod      Pod       `json:"pod,omitempty" yaml:"pod,omitempty"`
+	PodID    string    `json:"podID,omitempty" yaml:"podID,omitempty"`
 }
 
-type JobState string
+type JobStatus string
 
 const (
-	JobNew      JobState = "new"
-	JobPending  JobState = "pending"
-	JobRunning  JobState = "running"
-	JobComplete JobState = "complete"
+	JobNew      JobStatus = "new"
+	JobPending  JobStatus = "pending"
+	JobRunning  JobStatus = "running"
+	JobComplete JobStatus = "complete"
 )
 
 // APIObject has appropriate encoder and decoder functions, such that on the wire, it's
