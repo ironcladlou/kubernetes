@@ -138,10 +138,10 @@ func TestProxyHandler(t *testing.T) {
 			apiService: &apiregistration.APIService{
 				ObjectMeta: metav1.ObjectMeta{Name: "v1.foo"},
 				Spec: apiregistration.APIServiceSpec{
-					Service:               &apiregistration.ServiceReference{},
-					Group:                 "foo",
-					Version:               "v1",
-					InsecureSkipTLSVerify: true,
+					Service:  &apiregistration.ServiceReference{Name: "test-service", Namespace: "test-ns"},
+					Group:    "foo",
+					Version:  "v1",
+					CABundle: testCACrt,
 				},
 			},
 			expectedStatusCode: http.StatusOK,
