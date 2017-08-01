@@ -31,6 +31,5 @@ type Swagger struct {
 
 // Install adds the SwaggerUI webservice to the given mux.
 func (s Swagger) Install(c *restful.Container) {
-	s.Config.WebServices = c.RegisteredWebServices()
 	swagger.RegisterSwaggerService(*s.Config, c)
 }
