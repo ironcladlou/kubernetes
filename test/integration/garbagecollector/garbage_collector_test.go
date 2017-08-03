@@ -47,6 +47,7 @@ import (
 	"k8s.io/kubernetes/test/integration"
 
 	"github.com/coreos/pkg/capnslog"
+	"github.com/davecgh/go-spew/spew"
 )
 
 func getForegroundOptions() *metav1.DeleteOptions {
@@ -808,7 +809,7 @@ func TestBlockingOwnerRefDoesBlock(t *testing.T) {
 }
 
 func TestCRDDiscovery(t *testing.T) {
-	masterConfig, _ := apitesting.StartTestServerOrDie(t)
+	masterConfig, stopMaster := apitesting.StartTestServerOrDie(t)
 
 	repo, err := capnslog.GetRepoLogger("github.com/coreos/etcd")
 	if err != nil {
@@ -847,30 +848,32 @@ func TestCRDDiscovery(t *testing.T) {
 		Version:  definition.Spec.Version,
 		Resource: definition.Spec.Names.Plural,
 	}
-	t.Logf("created definition %#v", definition)
+	t.Logf("created CRD: %#v", definition)
+
 	var lastResources map[schema.GroupVersionResource]struct{}
-	var lastResourcesError error
-	if err := wait.Poll(1*time.Second, 20*time.Second, func() (bool, error) {
+	var lastResourcesErr error
+	if err := wait.Poll(2*time.Second, 20*time.Second, func() (bool, error) {
 		restMapper.Reset()
-		lastResources, lastResourcesError = garbagecollector.GetDeletableResources(discoveryClient)
-		if lastResourcesError != nil {
-			return false, lastResourcesError
+		lastResources, lastResourcesErr = garbagecollector.GetDeletableResources(discoveryClient)
+		if lastResourcesErr != nil {
+			return false, lastResourcesErr
 		}
-		for gvr := range lastResources {
-			if gvr.String() == expected.String() {
-				return true, nil
-			}
+		kind, err := restMapper.KindFor(expected)
+		if err != nil {
+			t.Logf("restmapper failed to map %s: %v", expected.String(), err)
+			return false, nil
 		}
-		return false, nil
+		t.Logf("mapped %s to %s", expected.String(), kind.String())
+		return true, nil
 	}); err != nil {
-		t.Fatalf("failed waiting for CRD to appear: %s\nlast resources: %s", expected.String(), render(lastResources))
+		t.Logf("last observed resources: %s", render(lastResources))
+		stopMaster()
+		scs := spew.ConfigState{Indent: "\t"}
+		scs.Dump(restMapper)
+		t.Fatalf("restmapper was unable to map %s", expected.String())
 	}
-	t.Logf("expected CRD appeared in discovery: %s", expected.String())
-	kind, err := restMapper.KindFor(expected)
-	if err != nil {
-		t.Fatalf("restmapper failed to map %s: %v", expected.String(), err)
-	}
-	t.Logf("restmapper mapped %s to %s", expected.String(), kind.String())
+	scs := spew.ConfigState{Indent: "\t"}
+	scs.Dump(restMapper)
 }
 
 func render(m map[schema.GroupVersionResource]struct{}) string {
