@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/storage/names"
@@ -262,7 +263,7 @@ func setup(t *testing.T, workerCount int) *testContext {
 			"etcdserver/api/v3rpc": capnslog.ERROR,
 		})
 	}
-	syncPeriod := 5 * time.Second
+	syncPeriod := 1 * time.Second
 	startGC := func(workers int) {
 		go gc.Run(workers, stopCh)
 		go gc.Sync(restMapper, discoveryClient, syncPeriod, stopCh)
@@ -804,6 +805,80 @@ func TestBlockingOwnerRefDoesBlock(t *testing.T) {
 	if len(pods.Items) != 1 {
 		t.Errorf("expect there to be 1 pods, got %#v", pods.Items)
 	}
+}
+
+func TestCRDDiscovery(t *testing.T) {
+	masterConfig, _ := apitesting.StartTestServerOrDie(t)
+
+	repo, err := capnslog.GetRepoLogger("github.com/coreos/etcd")
+	if err != nil {
+		t.Fatalf("couldn't configure logging: %v", err)
+	}
+	repo.SetLogLevel(map[string]capnslog.LogLevel{
+		"etcdserver/api/v3rpc": capnslog.CRITICAL,
+	})
+
+	clientSet, err := clientset.NewForConfig(masterConfig)
+	if err != nil {
+		t.Fatalf("error creating clientset: %v", err)
+	}
+
+	apiExtensionClient, err := apiextensionsclientset.NewForConfig(masterConfig)
+	if err != nil {
+		t.Fatalf("error creating extension clientset: %v", err)
+	}
+	createNamespaceOrDie("aval", clientSet, t)
+
+	discoveryClient := cacheddiscovery.NewMemCacheClient(clientSet.Discovery())
+
+	restMapper := discovery.NewDeferredDiscoveryRESTMapper(discoveryClient, meta.InterfacesForUnstructured)
+	restMapper.Reset()
+
+	config := *masterConfig
+	config.ContentConfig = dynamic.ContentConfig()
+
+	clientPool := dynamic.NewClientPool(&config, restMapper, dynamic.LegacyAPIPathResolverFunc)
+
+	ns := createNamespaceOrDie("crd-cascading", clientSet, t)
+
+	definition, _ := createRandomCustomResourceDefinition(t, apiExtensionClient, clientPool, ns.Name)
+	expected := schema.GroupVersionResource{
+		Group:    definition.Spec.Group,
+		Version:  definition.Spec.Version,
+		Resource: definition.Spec.Names.Plural,
+	}
+	t.Logf("created definition %#v", definition)
+	var lastResources map[schema.GroupVersionResource]struct{}
+	var lastResourcesError error
+	if err := wait.Poll(1*time.Second, 20*time.Second, func() (bool, error) {
+		restMapper.Reset()
+		lastResources, lastResourcesError = garbagecollector.GetDeletableResources(discoveryClient)
+		if lastResourcesError != nil {
+			return false, lastResourcesError
+		}
+		for gvr := range lastResources {
+			if gvr.String() == expected.String() {
+				return true, nil
+			}
+		}
+		return false, nil
+	}); err != nil {
+		t.Fatalf("failed waiting for CRD to appear: %s\nlast resources: %s", expected.String(), render(lastResources))
+	}
+	t.Logf("expected CRD appeared in discovery: %s", expected.String())
+	kind, err := restMapper.KindFor(expected)
+	if err != nil {
+		t.Fatalf("restmapper failed to map %s: %v", expected.String(), err)
+	}
+	t.Logf("restmapper mapped %s to %s", expected.String(), kind.String())
+}
+
+func render(m map[schema.GroupVersionResource]struct{}) string {
+	s := ""
+	for k := range m {
+		s += k.String() + "\n"
+	}
+	return s
 }
 
 // TestCustomResourceCascadingDeletion ensures the basic cascading delete
