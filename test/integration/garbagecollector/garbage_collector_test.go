@@ -47,7 +47,6 @@ import (
 	"k8s.io/kubernetes/test/integration"
 
 	"github.com/coreos/pkg/capnslog"
-	"github.com/davecgh/go-spew/spew"
 )
 
 func getForegroundOptions() *metav1.DeleteOptions {
@@ -808,8 +807,9 @@ func TestBlockingOwnerRefDoesBlock(t *testing.T) {
 	}
 }
 
-func TestCRDDiscovery(t *testing.T) {
+func TestCRDMapping(t *testing.T) {
 	masterConfig, stopMaster := apitesting.StartTestServerOrDie(t)
+	defer stopMaster()
 
 	repo, err := capnslog.GetRepoLogger("github.com/coreos/etcd")
 	if err != nil {
@@ -848,40 +848,19 @@ func TestCRDDiscovery(t *testing.T) {
 		Version:  definition.Spec.Version,
 		Resource: definition.Spec.Names.Plural,
 	}
+
 	t.Logf("created CRD: %#v", definition)
 
-	var lastResources map[schema.GroupVersionResource]struct{}
-	var lastResourcesErr error
-	if err := wait.Poll(2*time.Second, 20*time.Second, func() (bool, error) {
-		restMapper.Reset()
-		lastResources, lastResourcesErr = garbagecollector.GetDeletableResources(discoveryClient)
-		if lastResourcesErr != nil {
-			return false, lastResourcesErr
-		}
-		kind, err := restMapper.KindFor(expected)
-		if err != nil {
-			t.Logf("restmapper failed to map %s: %v", expected.String(), err)
-			return false, nil
-		}
-		t.Logf("mapped %s to %s", expected.String(), kind.String())
-		return true, nil
-	}); err != nil {
-		t.Logf("last observed resources: %s", render(lastResources))
-		stopMaster()
-		scs := spew.ConfigState{Indent: "\t"}
-		scs.Dump(restMapper)
-		t.Fatalf("restmapper was unable to map %s", expected.String())
-	}
-	scs := spew.ConfigState{Indent: "\t"}
-	scs.Dump(restMapper)
-}
+	restMapper.Reset()
 
-func render(m map[schema.GroupVersionResource]struct{}) string {
-	s := ""
-	for k := range m {
-		s += k.String() + "\n"
+	_, err = garbagecollector.GetDeletableResources(discoveryClient)
+	if err != nil {
+		t.Fatalf("couldn't get deletable resources: %v", err)
 	}
-	return s
+	_, err = restMapper.KindFor(expected)
+	if err != nil {
+		t.Fatalf("restmapper failed to map %s: %v", expected.String(), err)
+	}
 }
 
 // TestCustomResourceCascadingDeletion ensures the basic cascading delete
