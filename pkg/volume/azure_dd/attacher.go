@@ -151,7 +151,7 @@ func (a *azureDiskAttacher) VolumesAreAttached(specs []*volume.Spec, nodeName ty
 }
 
 // WaitForAttach runs on the node to detect if the volume (referenced by LUN) is attached. If attached, the device path is returned
-func (attacher *azureDiskAttacher) WaitForAttach(spec *volume.Spec, devicePath string, _ *v1.Pod, timeout time.Duration) (string, error) {
+func (a *azureDiskAttacher) WaitForAttach(spec *volume.Spec, devicePath string, _ *v1.Pod, timeout time.Duration) (string, error) {
 	var err error
 	lun, err := strconv.Atoi(devicePath)
 	if err != nil {
