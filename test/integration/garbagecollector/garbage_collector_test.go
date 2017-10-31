@@ -430,6 +430,52 @@ func TestCreateWithNonExistentOwner(t *testing.T) {
 	}
 }
 
+func TestVirtualNodeRaces(t *testing.T) {
+	ctx := setup(t, 5)
+	defer ctx.tearDown()
+
+	clientSet := ctx.clientSet
+
+	ns := createNamespaceOrDie("gc-virtual-node-races", clientSet, t)
+	defer deleteNamespaceOrDie(ns.Name, clientSet, t)
+
+	nodeClient := clientSet.CoreV1().Nodes()
+	podClient := clientSet.CoreV1().Pods(ns.Name)
+
+	node := &v1.Node{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Node",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "gcnode",
+		},
+		Spec: v1.NodeSpec{
+			ExternalID: "gcnode",
+		},
+	}
+	if created, err := nodeClient.Create(node); err != nil {
+		t.Fatalf("couldn't create node: %v", err)
+	} else {
+		node = created
+	}
+	pod := newPod(garbageCollectedPodName, ns.Name, []metav1.OwnerReference{{
+		Kind:       "Node",
+		APIVersion: "v1",
+		Name:       node.Name,
+		UID:        node.UID,
+	}})
+	_, err := podClient.Create(pod)
+	if err != nil {
+		t.Fatalf("couldn't create pod: %v", err)
+	}
+
+	time.Sleep(5 * time.Second)
+	if _, err := podClient.Get(pod.Name, metav1.GetOptions{}); err != nil {
+		t.Fatalf("error getting pod: %v", err)
+	}
+}
+
 func setupRCsPods(t *testing.T, gc *garbagecollector.GarbageCollector, clientSet clientset.Interface, nameSuffix, namespace string, initialFinalizers []string, options *metav1.DeleteOptions, wg *sync.WaitGroup, rcUIDs chan types.UID) {
 	defer wg.Done()
 	rcClient := clientSet.CoreV1().ReplicationControllers(namespace)
